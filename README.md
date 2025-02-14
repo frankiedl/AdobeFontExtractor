@@ -2,6 +2,9 @@
 
 A Python-based GUI tool to extract and save Adobe Creative Cloud fonts that are installed on your system. This tool helps you backup your Adobe fonts by finding them in the Adobe CoreSync folders and saving them with their proper names and extensions.
 
+![image](https://github.com/user-attachments/assets/3914b3c2-51f6-4cec-b6b8-36b7a199f732)
+
+
 ## Features
 
 - User-friendly graphical interface
