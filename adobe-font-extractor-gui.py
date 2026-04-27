@@ -27,15 +27,21 @@ class FontExtractorGUI:
         self.search_var.trace('w', self.on_search_change)
         self.fonts: List[FontData] = []
         self.font_checkboxes: Dict[str, tuple] = {}
+        self.selected_ids: set = set()
         self.font_dir = None
         
         self.setup_gui()
         self.load_fonts()
 
     def setup_gui(self):
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+
         # Main frame
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(1, weight=1)
         
         # Search bar
         ttk.Label(main_frame, text="Search font:").grid(row=0, column=0, sticky=tk.W)
@@ -121,6 +127,18 @@ class FontExtractorGUI:
         except ElementTree.ParseError as e:
             raise ValueError(f"Error al analizar el archivo manifest: {e}")
 
+    def detect_font_extension(self, file_path: str) -> str:
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(4)
+            if header == b'OTTO':
+                return '.otf'
+            if header[:4] in (b'\x00\x01\x00\x00', b'true', b'typ1'):
+                return '.ttf'
+        except Exception:
+            pass
+        return '.otf'
+
     def find_font_file(self, font_id: str) -> str:
         """Busca el archivo numerado en todas las subcarpetas excepto 'c'"""
         adobe_root = self.font_dir
@@ -148,10 +166,14 @@ class FontExtractorGUI:
 
     def export_selected(self):
         """Export selected fonts"""
-        selected_fonts = [
-            font for font in self.fonts
-            if font.id in self.font_checkboxes and self.font_checkboxes[font.id][1].get()
-        ]
+        # Sync visible checkboxes into selected_ids before exporting
+        for font_id, (_, var) in self.font_checkboxes.items():
+            if var.get():
+                self.selected_ids.add(font_id)
+            else:
+                self.selected_ids.discard(font_id)
+
+        selected_fonts = [font for font in self.fonts if font.id in self.selected_ids]
         
         if not selected_fonts:
             messagebox.showwarning("Warning", "No fonts selected")
@@ -177,8 +199,8 @@ class FontExtractorGUI:
                         skipped_count += 1
                         continue
 
-                    # Crear el nuevo nombre con extensión .otf
-                    new_name = f"{font.name} - {font.weight}.otf"
+                    ext = self.detect_font_extension(src_path)
+                    new_name = f"{font.name} - {font.weight}{ext}"
                     # Reemplazar caracteres inválidos para nombres de archivo
                     new_name = new_name.replace('/', '-').replace('\\', '-').replace(':', '-')
                     dest_path = pjoin(export_dir, new_name)
@@ -250,20 +272,36 @@ class FontExtractorGUI:
 
     def display_fonts(self, filter_text: str = ""):
         """Display fonts in the interface, optionally filtered"""
+        # Persist current checkbox state before rebuilding
+        for font_id, (_, var) in self.font_checkboxes.items():
+            if var.get():
+                self.selected_ids.add(font_id)
+            else:
+                self.selected_ids.discard(font_id)
+
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
         self.font_checkboxes.clear()
-        
-        for i, font in enumerate(self.fonts):
+
+        row_idx = 0
+        for font in self.fonts:
             if filter_text.lower() in font.name.lower():
-                var = tk.BooleanVar()
+                var = tk.BooleanVar(value=font.id in self.selected_ids)
+                var.trace('w', lambda *_, fid=font.id, v=var: self._on_checkbox(fid, v))
                 cb = ttk.Checkbutton(
                     self.scrollable_frame,
                     text=f"{font.name} - {font.weight}",
                     variable=var
                 )
-                cb.grid(row=i, column=0, sticky=tk.W)
+                cb.grid(row=row_idx, column=0, sticky=tk.W)
                 self.font_checkboxes[font.id] = (cb, var)
+                row_idx += 1
+
+    def _on_checkbox(self, font_id: str, var: tk.BooleanVar):
+        if var.get():
+            self.selected_ids.add(font_id)
+        else:
+            self.selected_ids.discard(font_id)
 
     def select_all(self):
         """Select all visible fonts"""
