@@ -82,7 +82,7 @@ class FontExtractorGUI:
         if sys.platform == 'win32':  # Windows
             path_prefix = os.path.expandvars(r'%APPDATA%\Adobe\CoreSync\plugins\livetype')
             manifest = pjoin(path_prefix, 'c', 'entitlements.xml')
-            font_dir = path_prefix  # Use root directory to search all subfolders
+            font_dir = path_prefix
         else:  # MacOS
             path_prefix = os.path.expandvars(r'$HOME/Library/Application Support/Adobe/CoreSync/plugins/livetype')
             manifest = os.path.join(path_prefix, '.c', 'entitlements.xml')
@@ -103,11 +103,24 @@ class FontExtractorGUI:
             for font_elem in fonts_subtree.findall('font'):
                 try:
                     props = font_elem.find('properties')
-                    f_id = font_elem.find('id').text
-                    f_name = props.find('familyName').text
-                    f_weight = props.find('variationName').text
+                    if props is None:
+                        logger.warning("Font element missing properties tag")
+                        continue
+                    
+                    id_elem = font_elem.find('id')
+                    family_name_elem = props.find('familyName')
+                    var_name_elem = props.find('variationName')
+                    
+                    if id_elem is None or family_name_elem is None or var_name_elem is None:
+                        logger.warning("Font element missing required XML elements")
+                        continue
+                    
+                    f_id = id_elem.text
+                    f_name = family_name_elem.text
+                    f_weight = var_name_elem.text
                     
                     if not all([f_id, f_name, f_weight]):
+                        logger.warning("Font element has empty text values")
                         continue
                         
                     font = FontData(id=f_id, name=f_name, weight=f_weight)
@@ -141,11 +154,15 @@ class FontExtractorGUI:
                 return file_path
             
             # Recursively search subdirectories for nested structures
-            for root, dirs, files in os.walk(subdir_path):
-                if font_id_str in files:
-                    found_path = os.path.join(root, font_id_str)
-                    logger.debug(f"Found font file at: {found_path}")
-                    return found_path
+            try:
+                for root, dirs, files in os.walk(subdir_path):
+                    if font_id_str in files:
+                        found_path = os.path.join(root, font_id_str)
+                        logger.debug(f"Found font file at: {found_path}")
+                        return found_path
+            except (OSError, PermissionError) as e:
+                logger.warning(f"Error walking directory {subdir_path}: {e}")
+                continue
         
         logger.warning(f"Font file not found for ID: {font_id_str}")
         return None
@@ -184,7 +201,10 @@ class FontExtractorGUI:
                     # Create filename with font name and weight (preserve original format)
                     new_name = f"{font.name} - {font.weight}"
                     # Replace invalid filename characters
-                    new_name = new_name.replace('/', '-').replace('\\', '-').replace(':', '-').replace('*', '-').replace('?', '-').replace('"', '-').replace('<', '-').replace('>', '-').replace('|', '-')
+                    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+                    for char in invalid_chars:
+                        new_name = new_name.replace(char, '-')
+                    
                     dest_path = pjoin(export_dir, new_name)
                     
                     # Check if file exists and handle conflicts
@@ -269,7 +289,8 @@ class FontExtractorGUI:
             widget.destroy()
         self.font_checkboxes.clear()
         
-        for i, font in enumerate(self.fonts):
+        visible_count = 0
+        for font in self.fonts:
             if filter_text.lower() in font.name.lower():
                 var = tk.BooleanVar()
                 cb = ttk.Checkbutton(
@@ -277,8 +298,9 @@ class FontExtractorGUI:
                     text=f"{font.name} - {font.weight}",
                     variable=var
                 )
-                cb.grid(row=i, column=0, sticky=tk.W)
+                cb.grid(row=visible_count, column=0, sticky=tk.W)
                 self.font_checkboxes[font.id] = (cb, var)
+                visible_count += 1
 
     def select_all(self):
         """Select all visible fonts"""
