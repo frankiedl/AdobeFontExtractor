@@ -1,6 +1,6 @@
 # Adobe Font Extractor
 
-A Python-based GUI tool to extract and save Adobe Creative Cloud fonts that are installed on your system. This tool helps you backup your Adobe fonts by finding them in the Adobe CoreSync folders and saving them with their proper names and extensions.
+A Python-based GUI tool to extract and save Adobe Creative Cloud fonts that are installed on your system. This tool helps you backup your Adobe fonts by finding them in the Adobe CoreSync folders and copying them to a location of your choice.
 
 ![image](https://github.com/user-attachments/assets/3914b3c2-51f6-4cec-b6b8-36b7a199f732)
 
@@ -24,7 +24,7 @@ A Python-based GUI tool to extract and save Adobe Creative Cloud fonts that are 
 
 1. Clone this repository or download the Python script:
 ```bash
-git clone https://github.com/yourusername/adobe-font-extractor.git
+git clone https://github.com/frankiedl/AdobeFontExtractor.git
 ```
 
 2. Make sure you have Python installed on your system.
@@ -35,7 +35,7 @@ git clone https://github.com/yourusername/adobe-font-extractor.git
 
 1. Run the script:
 ```bash
-python adobe-font-extractor.py
+python adobe-font-extractor-gui.py
 ```
 
 2. The application will open and automatically scan your Adobe fonts directory:
@@ -54,7 +54,7 @@ The tool works by:
 
 1. Reading Adobe's `entitlements.xml` file to get font metadata (names, weights, IDs)
 2. Scanning Adobe's CoreSync folders (except 'c') to find the actual font files
-3. Copying the files to your chosen destination with proper names and .otf extension
+3. Copying the files to your chosen destination with their original names and format
 4. Making the exported files visible and accessible
 
 ## Common Issues
@@ -63,6 +63,15 @@ The tool works by:
 - Make sure you have an active Adobe Creative Cloud subscription
 - Verify that you have synced fonts through Adobe Creative Cloud
 - Check if the Adobe CoreSync folder exists in the expected location
+
+### Invalid Fonts After Export
+**This issue has been fixed in recent versions.** The tool now preserves the original font file format from Adobe instead of forcing an `.otf` extension. Exported fonts should now work correctly in most applications.
+
+**If you encounter invalid fonts:**
+- Ensure you're running the latest version of this tool
+- Try re-exporting the fonts to a different location
+- Check that you have sufficient disk space for the export
+- Verify font files were copied completely (check file sizes)
 
 ### Export Errors
 - Ensure you have write permissions in the destination folder
