@@ -82,10 +82,10 @@ class FontExtractorGUI:
         if sys.platform == 'win32':  # Windows
             path_prefix = os.path.expandvars(r'%APPDATA%\Adobe\CoreSync\plugins\livetype')
             manifest = pjoin(path_prefix, 'c', 'entitlements.xml')
-            font_dir = path_prefix  # Usamos el directorio raíz para buscar en todas las carpetas
+            font_dir = path_prefix  # Use root directory to search all subfolders
         else:  # MacOS
             path_prefix = os.path.expandvars(r'$HOME/Library/Application Support/Adobe/CoreSync/plugins/livetype')
-            manifest = os.path.join(path_prefix, '.c/entitlements.xml')
+            manifest = os.path.join(path_prefix, '.c', 'entitlements.xml')
             font_dir = path_prefix
         
         return Config(path_prefix, font_dir, manifest)
@@ -113,37 +113,41 @@ class FontExtractorGUI:
                     font = FontData(id=f_id, name=f_name, weight=f_weight)
                     fonts.append(font)
                 except (AttributeError, TypeError) as e:
-                    logger.warning(f"Error procesando fuente en manifest: {e}")
+                    logger.warning(f"Error processing font in manifest: {e}")
                     continue
 
             return fonts
             
         except ElementTree.ParseError as e:
-            raise ValueError(f"Error al analizar el archivo manifest: {e}")
+            raise ValueError(f"Error parsing manifest file: {e}")
 
     def find_font_file(self, font_id: str) -> str:
-        """Busca el archivo numerado en todas las subcarpetas excepto 'c'"""
+        """Recursively search for font file in Adobe subdirectories"""
         adobe_root = self.font_dir
         font_id_str = str(font_id)
         
-        # Lista de subdirectorios a revisar (excluyendo 'c')
+        # List of subdirectories to check (excluding 'c')
         subdirs = ['e', 'r', 't', 'u', 'w', 'x']
         
         for subdir in subdirs:
             subdir_path = os.path.join(adobe_root, subdir)
             if not os.path.exists(subdir_path):
                 continue
-                
-            # Buscar el archivo por su número ID
+            
+            # Check for file directly in subdir
             file_path = os.path.join(subdir_path, font_id_str)
-            if os.path.exists(file_path):
+            if os.path.isfile(file_path):
+                logger.debug(f"Found font file at: {file_path}")
                 return file_path
-                
-            # También buscar en una subcarpeta con el mismo número
-            nested_path = os.path.join(subdir_path, font_id_str, font_id_str)
-            if os.path.exists(nested_path):
-                return nested_path
+            
+            # Recursively search subdirectories for nested structures
+            for root, dirs, files in os.walk(subdir_path):
+                if font_id_str in files:
+                    found_path = os.path.join(root, font_id_str)
+                    logger.debug(f"Found font file at: {found_path}")
+                    return found_path
         
+        logger.warning(f"Font file not found for ID: {font_id_str}")
         return None
 
     def export_selected(self):
@@ -173,42 +177,53 @@ class FontExtractorGUI:
                     src_path = self.find_font_file(font.id)
                     
                     if not src_path:
-                        logger.warning(f"No se encontró el archivo para ID {font.id} ({font.name})")
+                        logger.warning(f"Font file not found for ID {font.id} ({font.name})")
                         skipped_count += 1
                         continue
 
-                    # Crear el nuevo nombre con extensión .otf
-                    new_name = f"{font.name} - {font.weight}.otf"
-                    # Reemplazar caracteres inválidos para nombres de archivo
-                    new_name = new_name.replace('/', '-').replace('\\', '-').replace(':', '-')
+                    # Create filename with font name and weight (preserve original format)
+                    new_name = f"{font.name} - {font.weight}"
+                    # Replace invalid filename characters
+                    new_name = new_name.replace('/', '-').replace('\\', '-').replace(':', '-').replace('*', '-').replace('?', '-').replace('"', '-').replace('<', '-').replace('>', '-').replace('|', '-')
                     dest_path = pjoin(export_dir, new_name)
                     
-                    # Copiar el archivo y renombrarlo
-                    shutil.copy2(src_path, dest_path)
+                    # Check if file exists and handle conflicts
+                    if os.path.exists(dest_path):
+                        counter = 1
+                        base_name = new_name
+                        while os.path.exists(dest_path):
+                            new_name = f"{base_name} ({counter})"
+                            dest_path = pjoin(export_dir, new_name)
+                            counter += 1
                     
-                    # Hacer el archivo visible
+                    # Copy the file and rename it
+                    shutil.copy2(src_path, dest_path)
+                    logger.info(f"Font copied: {new_name}")
+                    
+                    # Make the file visible/readable
                     if sys.platform == 'win32':
                         try:
                             import subprocess
-                            subprocess.run(['attrib', '-H', '-S', '-R', dest_path], check=True)
-                        except subprocess.CalledProcessError as e:
-                            logger.warning(f"No se pudieron cambiar los atributos del archivo {new_name}: {e}")
+                            subprocess.run(['attrib', '-H', '-S', '-R', dest_path], check=False)
+                        except Exception as e:
+                            logger.warning(f"Could not change file attributes for {new_name}: {e}")
                     else:
-                        # Para sistemas Unix/Mac
+                        # For Unix/Mac systems
                         try:
                             import stat
                             os.chmod(dest_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
                         except Exception as e:
-                            logger.warning(f"No se pudieron cambiar los permisos del archivo {new_name}: {e}")
+                            logger.warning(f"Could not change file permissions for {new_name}: {e}")
                     
                     success_count += 1
-                    logger.info(f"Fuente copiada y hecha visible: {new_name}")
                     
                 except Exception as e:
-                    logger.error(f"Error copiando fuente {font.name}: {e}")
+                    logger.error(f"Error copying font {font.name}: {e}")
                     error_count += 1
             
             status_msg = f"Successfully exported {success_count} fonts"
+            if skipped_count > 0:
+                status_msg += f" ({skipped_count} skipped)"
             if error_count > 0:
                 status_msg += f" ({error_count} errors)"
             
@@ -227,22 +242,22 @@ class FontExtractorGUI:
             config = self.platform_setup()
             
             if not os.path.exists(config.manifest):
-                raise FileNotFoundError(f"No se encontró el archivo manifest de Adobe: {config.manifest}")
+                raise FileNotFoundError(f"Adobe manifest file not found: {config.manifest}")
             
             self.fonts = self.get_font_metadata(config.manifest)
             self.font_dir = config.font_dir
             
-            logger.info(f"Directorio de fuentes: {self.font_dir}")
-            logger.info(f"Fuentes encontradas: {len(self.fonts)}")
+            logger.info(f"Font directory: {self.font_dir}")
+            logger.info(f"Fonts found: {len(self.fonts)}")
             
             self.display_fonts()
-            self.status_var.set(f"Se cargaron {len(self.fonts)} fuentes")
+            self.status_var.set(f"Loaded {len(self.fonts)} fonts")
             
         except Exception as e:
-            error_msg = f"No se pudieron cargar las fuentes: {str(e)}"
+            error_msg = f"Could not load fonts: {str(e)}"
             logger.error(error_msg)
             messagebox.showerror("Error", error_msg)
-            self.status_var.set("Error cargando fuentes")
+            self.status_var.set("Error loading fonts")
 
     def on_search_change(self, *args):
         """Callback when search text changes"""
