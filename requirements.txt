@@ -1,0 +1,29 @@
+# Adobe Font Extractor & Converter
+# No external dependencies required - uses Python standard library only
+#
+# This file is provided for reference and environment documentation.
+# All functionality uses built-in Python modules.
+
+Python>=3.6
+
+# Standard Library Modules Used:
+# - sys: System operations and platform detection
+# - os: File and directory operations
+# - shutil: File copying and operations
+# - subprocess: External process execution (license verification)
+# - threading: Non-blocking UI operations
+# - xml.etree.ElementTree: XML parsing for Adobe metadata
+# - tkinter: GUI framework (usually included with Python)
+# - logging: Application logging
+# - struct: Binary data handling
+# - collections: Named tuples for data structures
+# - typing: Type hints for better code clarity
+# - hashlib: Hash calculations (available for future use)
+
+Optional Runtime:
+# For macOS: Ensure you have permission to access:
+#   - ~/Library/Application Support/Adobe/CoreSync/
+#
+# For Windows: No special permissions needed for user-level access
+#
+# Note: Admin privileges may be helpful for system font installation
